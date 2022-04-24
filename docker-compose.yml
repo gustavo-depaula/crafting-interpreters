@@ -1,0 +1,8 @@
+version: "3.9"
+services:
+  jvm:
+    build: ./
+    # image: zenika/kotlin
+    volumes:
+      - "./:/home/code:rw"
+    command: tail -F anything

@@ -15,6 +15,28 @@ class Scanner {
     private int current = 0;
     private int line = 1;
 
+    private static final Map<String, TokenType> keywords;
+
+    static {
+        keywords = new HashMap<>();
+        keywords.put("and",    TokenType.AND);
+        keywords.put("class",  TokenType.CLASS);
+        keywords.put("else",   TokenType.ELSE);
+        keywords.put("false",  TokenType.FALSE);
+        keywords.put("for",    TokenType.FOR);
+        keywords.put("fun",    TokenType.FUN);
+        keywords.put("if",     TokenType.IF);
+        keywords.put("nil",    TokenType.NIL);
+        keywords.put("or",     TokenType.OR);
+        keywords.put("print",  TokenType.PRINT);
+        keywords.put("return", TokenType.RETURN);
+        keywords.put("super",  TokenType.SUPER);
+        keywords.put("this",   TokenType.THIS);
+        keywords.put("true",   TokenType.TRUE);
+        keywords.put("var",    TokenType.VAR);
+        keywords.put("while",  TokenType.WHILE);
+    }
+
     Scanner(String source) {
         this.source = source;
     }
@@ -62,9 +84,15 @@ class Scanner {
         case '/':
             if (match('/')) {
                 advanceTilEOL();
-            } else {
-                addToken(TokenType.SLASH);
+                return;
             }
+
+            if (match('*')) {
+                advanceTil('*/');
+                return;
+            }
+
+            addToken(TokenType.SLASH);
             break;
 
         // ignore whitespaces
@@ -77,7 +105,20 @@ class Scanner {
             line++;
             break;
 
+        // string literal
+        case '"': string(); break;
+
         default:
+            if (isDigit(c)) {
+                number();
+                return;
+            }
+
+            if (isAlpha(c)) {
+                identifier();
+                return;
+            }
+
             Lox.error(line, "Unexpected character.");
             break;
         }
@@ -105,12 +146,101 @@ class Scanner {
         while (peek() != '\n' && !isAtEnd()) advance();
     }
 
+    private void advanceTil(String s) {
+        while (current + s.length() - 1 >= source.length()) {
+            if (source.substring(current, current + s.length() - 1).equals(s)) {
+                break;
+            }
+            advance();
+        }
+
+        if (isAtEnd()) {
+            Lox.error(line, "Unterminated multiline comment.");
+            return;
+        }
+    }
+
     private char peek() {
         if (isAtEnd()) {
             return '\0';
         }
 
         return source.charAt(current);
+    }
+
+    private char peekNext() {
+        if (current + 1 >= source.length()) {
+            return '\0';
+        }
+
+        return source.charAt(current + 1);
+    }
+
+    private void string() {
+        while (peek() != '"' && !isAtEnd()) {
+            if (peek() == '\n') {
+                line++;
+            }
+
+            advance();
+        }
+
+        if (isAtEnd()) {
+            Lox.error(line, "Unterminated string.");
+            return;
+        }
+
+        // closing quote
+        advance();
+
+        // trim quotes
+        String value = source.substring(start+1, current-1);
+        addToken(TokenType.STRING, value);
+    }
+
+    private boolean isDigit(char c) {
+        return c >= '0' && c <= '9';
+    }
+
+    private void number() {
+        while (isDigit(peek())) {
+            advance();
+        }
+
+        // fraction
+        if (peek() == '.' && isDigit(peekNext())) {
+            // consume dot
+            advance();
+
+            while (isDigit(peek())) {
+                advance();
+            }
+        }
+
+        addToken(TokenType.NUMBER,
+                 Double.parseDouble(source.substring(start, current)));
+    }
+
+    private boolean isAlpha(char c) {
+        return (c >= 'a' && c <= 'z') ||
+            (c >= 'A' && c <= 'Z') ||
+            c == '_';
+    }
+
+    private boolean isAlphaNumeric(char c) {
+        return isAlpha(c) || isDigit(c);
+    }
+
+    private void identifier() {
+        while (isAlphaNumeric(peek())) {
+            advance();
+        }
+
+        String text = source.substring(start, current);
+        TokenType type = keywords.get(text);
+        if (type == null) type = TokenType.IDENTIFIER;
+
+        addToken(type);
     }
 
     private void addToken(TokenType type) {
